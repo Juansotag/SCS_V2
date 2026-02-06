@@ -50,7 +50,7 @@ OUTPUT_XLSX = OUTPUT_DIR / "resultados_matching.xlsx"
 
 # Control de ejecución
 ONLY_DANE: Optional[str] = None      # Procesa todos los municipios
-MAX_CANDIDATES_PER_PROJECT = 100     # Aumentado para mayor cobertura semántica (solicitud usuario)
+MAX_CANDIDATES_PER_PROJECT = 60      # Ajustado a 60 por solicitud del usuario
 MODEL_NAME = "gpt-4o-mini"          # Cambia si quieres (p.ej. gpt-4.1, gpt-4o-mini). Debe soportar JSON.
 TEMPERATURE = 0.2                   # Aumentado ligeramente para mayor flexibilidad en la relación
 
@@ -417,28 +417,78 @@ def main():
 
     proyectos = load_projects(PROJECTS_XLSX)
 
-    all_results = []
-    for f in sorted(SISPT_DIR.glob("*.xlsx")):
-        df_muni = process_municipio_file(client, proyectos, f)
-        if not df_muni.empty:
-            all_results.append(df_muni)
+    # --- Lógica de Checkpoint ---
+    checkpoint_file = OUTPUT_DIR / "checkpoint_matching.csv"
+    processed_municipios = set()
+    all_results_list = []
 
-    if not all_results:
-        raise RuntimeError("No se generaron resultados. Revisa ONLY_DANE o la carpeta SisPT.")
+    if checkpoint_file.exists():
+        print(f"--- Cargando progreso previo desde {checkpoint_file} ---")
+        try:
+            df_prev = pd.read_csv(checkpoint_file, dtype=str)
+            if not df_prev.empty:
+                # El municipio se identifica por el nombre procesado en la columna 'Municipio'
+                processed_municipios = set(df_prev["Municipio"].unique())
+                all_results_list.append(df_prev)
+                print(f"Municipios ya procesados: {', '.join(processed_municipios)}")
+        except Exception as e:
+            print(f"⚠️ Error cargando checkpoint: {e}. Se reiniciará el proceso.")
 
-    out = pd.concat(all_results, ignore_index=True)
+    files_to_process = sorted(SISPT_DIR.glob("*.xlsx"))
+    
+    try:
+        for f in files_to_process:
+            try:
+                # Vista rápida para extraer municipio antes de procesar todo
+                temp_xls = pd.ExcelFile(f)
+                temp_sheet = find_sheet_name(temp_xls)
+                temp_df = load_merged_header_sheet(f, temp_sheet)
+                _, muni_name = extract_dane_and_municipio(temp_df, f.stem)
+                
+                if muni_name in processed_municipios:
+                    print(f"Saliendo de {f.name}: {muni_name} ya está en el checkpoint.")
+                    continue
+                    
+                df_muni = process_municipio_file(client, proyectos, f)
+                if not df_muni.empty:
+                    all_results_list.append(df_muni)
+                    # Guardar incremento al checkpoint (CSV es más rápido y seguro para appends)
+                    df_muni.to_csv(checkpoint_file, mode='a', index=False, header=not checkpoint_file.exists(), encoding='utf-8-sig')
+                    processed_municipios.add(muni_name)
+                    print(f"✅ Avance guardado para {muni_name}")
+                    
+            except Exception as e:
+                print(f"\n❌ Error procesando {f.name}: {e}")
+                if "insufficient_quota" in str(e).lower():
+                    print("\n🛑 SE AGOTÓ EL SALDO EN OPENAI. Se guardará lo que se lleva hasta ahora.")
+                    break
+                # Para otros errores, intentamos seguir con el siguiente municipio
+                continue
+    except KeyboardInterrupt:
+        print("\n\n👋 Proceso interrumpido por el usuario. Guardando resultados parciales...")
 
-    # Guardar Excel con manejo de errores (por si está abierto)
+    if not all_results_list:
+        print("No hay resultados para exportar.")
+        return
+
+    print("\n--- Generando archivo Excel consolidado final ---")
+    # Consolidar todo
+    out = pd.concat(all_results_list, ignore_index=True)
+    # Limpieza: Si el CSV del checkpoint se leyó al principio, podría haber duplicados
+    out.drop_duplicates(subset=["Municipio", "ID_Proyecto"], keep="last", inplace=True)
+
     try:
         with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl") as writer:
             out.to_excel(writer, index=False, sheet_name="matching")
-        print(f"Listo. Guardado en: {OUTPUT_XLSX.resolve()}")
+        print(f"\n✨ PROCESO COMPLETADO ✨")
+        print(f"Resultado consolidado en: {OUTPUT_XLSX.resolve()}")
+        # Opcional: borrar checkpoint si terminó todo bien
+        # checkpoint_file.unlink()
     except PermissionError:
         alt_output = OUTPUT_DIR / f"resultados_matching_{int(pd.Timestamp.now().timestamp())}.xlsx"
         with pd.ExcelWriter(alt_output, engine="openpyxl") as writer:
             out.to_excel(writer, index=False, sheet_name="matching")
-        print(f"⚠️ No se pudo sobreescribir el archivo original (¿está abierto?).")
-        print(f"Guardado alternativo en: {alt_output.resolve()}")
+        print(f"⚠️ No se pudo escribir el Excel final (¿abierto?). Guardado en: {alt_output.name}")
 
 
 if __name__ == "__main__":
