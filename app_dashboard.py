@@ -16,12 +16,10 @@ import pandas as pd
 from flask import Flask, jsonify, render_template_string, send_from_directory, request
 from pyproj import Transformer
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-OUTPUT_XLSX   = Path("salidas/resultados_matching.xlsx")
-GEOJSON_FILE  = Path("sabanacentro.geojson")
-SISPT_DIR     = Path("sispt")
+BASE_DIR      = Path(__file__).parent
+OUTPUT_XLSX   = BASE_DIR / "salidas/resultados_matching.xlsx"
+GEOJSON_FILE  = BASE_DIR / "sabanacentro.geojson"
+SISPT_DIR     = BASE_DIR / "SisPT"
 
 # Dimensiones (primer número del ID)
 DIMENSION_NAMES = {
@@ -173,10 +171,21 @@ def api_data():
     if df.empty:
         return jsonify({"rows": [], "municipalities": [], "dimensions": []})
 
-    # Replace NaN/inf with None so JSON serialization doesn't produce invalid NaN literals
-    df = df.where(pd.notna(df), other=None)
-
-    rows = df.to_dict(orient="records")
+    # Extract rows to dicts
+    raw_rows = df.to_dict(orient="records")
+    
+    # Scrub NaN values safely (since pandas to_dict sometimes leaves float('nan') which breaks JS JSON)
+    rows = []
+    for r in raw_rows:
+        cleaned = {}
+        for k, v in r.items():
+            if isinstance(v, float) and v != v: # NaN check
+                cleaned[k] = None
+            elif v is pd.NA:
+                cleaned[k] = None
+            else:
+                cleaned[k] = v
+        rows.append(cleaned)
 
     municipalities = sorted(df["Municipio"].dropna().unique().tolist()) if "Municipio" in df.columns else []
     dimensions = sorted(df["Dimension"].dropna().unique().tolist()) if "Dimension" in df.columns else []
