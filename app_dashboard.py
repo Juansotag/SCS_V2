@@ -24,10 +24,10 @@ SISPT_DIR     = BASE_DIR / "SisPT"
 # Dimensiones (primer número del ID)
 DIMENSION_NAMES = {
     "1": "Medio Ambiente",
-    "2": "Educación",
-    "3": "Competitividad",
-    "4": "Infraestructura",
-    "5": "Salud",
+    "2": "Competitividad",
+    "3": "Infraestructura",
+    "4": "Salud",
+    "5": "Educación",
     "6": "Gobernanza",
     "7": "Cultura y Deporte",
     "8": "Social",
@@ -293,5 +293,5 @@ def sispt_viewer(dane_code):
 if __name__ == "__main__":
     # Crear carpeta templates si no existe
     Path("templates").mkdir(exist_ok=True)
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=8001)
 
