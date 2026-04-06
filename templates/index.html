@@ -33,6 +33,12 @@
   <!-- FILTERS BAR -->
   <div class="filters-bar">
     <div class="filter-group">
+      <label class="filter-label">Proyecto estratégico</label>
+      <select id="filter-proyecto" class="filter-select filter-select-wide">
+        <option value="">Todos los proyectos</option>
+      </select>
+    </div>
+    <div class="filter-group">
       <label class="filter-label">Dimensión</label>
       <select id="filter-dimension" class="filter-select">
         <option value="">Todas las dimensiones</option>
@@ -114,11 +120,14 @@
     <div class="radar-grid" id="radar-grid"></div>
   </section>
 
-  <!-- TOP 10 TABLE -->
+  <!-- TABLA DE PROYECTOS -->
   <section class="card table-card">
     <div class="card-header">
-      <span class="card-title">Top 10 proyectos con mayor calificación</span>
-      <span class="card-hint" id="table-scope-label">Todos los municipios · Todas las dimensiones</span>
+      <span class="card-title">Inventario de proyectos calificados</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="card-hint" id="table-scope-label">Todos los municipios · Todas las dimensiones</span>
+        <button id="btn-expand-table" class="btn-expand-table" title="Ver tabla completa">Ampliar</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table id="top-table">
@@ -148,6 +157,46 @@
       </table>
     </div>
   </section>
+
+  <!-- TABLE MODAL (expanded full view) -->
+  <div id="table-modal" class="table-modal-overlay" style="display:none;">
+    <div class="table-modal-box">
+      <div class="table-modal-header">
+        <div>
+          <span class="card-title">Tabla completa de proyectos calificados</span>
+          <span class="card-hint" id="modal-scope-label" style="margin-left:12px;">Todos los municipios · Todas las dimensiones</span>
+        </div>
+        <button id="btn-close-modal" class="btn-close-modal" title="Cerrar">✕ Cerrar</button>
+      </div>
+      <div class="table-modal-body">
+        <table id="full-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Municipio</th>
+              <th>Dimensión</th>
+              <th>ID</th>
+              <th>Proyecto</th>
+              <th>Código MGA</th>
+              <th>Producto SisPT</th>
+              <th>2024</th>
+              <th>2025</th>
+              <th>2026</th>
+              <th>2027</th>
+              <th>Espec.</th>
+              <th>Vis. Reg.</th>
+              <th>Impacto</th>
+              <th>Promedio</th>
+              <th>Justificación</th>
+            </tr>
+          </thead>
+          <tbody id="full-table-body">
+            <tr><td colspan="16" class="empty-row">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <!-- FOOTER -->
   <footer class="footer">

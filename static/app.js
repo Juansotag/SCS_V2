@@ -10,6 +10,7 @@ let geojsonLayer = null;
 let selectedMunicipio = "";
 let selectedDimension = "";
 let selectedSubscore   = "";   // "" | "Especificidad" | "Vision_Regional" | "Impacto"
+let selectedProyecto   = "";   // "" | ID_Proyecto value
 let isRadarAggregated  = true; // true = overlaped, false = separate
 let chartMunicipio, chartSub, chartDimension;
 let radarCharts = {};   // id -> Chart instance
@@ -55,8 +56,9 @@ function scoreField() {
 
 function applyFilters(rows) {
   return rows.filter(r => {
-    if (selectedMunicipio && r.Municipio !== selectedMunicipio) return false;
+    if (selectedMunicipio && r.Municipio  !== selectedMunicipio) return false;
     if (selectedDimension  && r.Dimension  !== selectedDimension)  return false;
+    if (selectedProyecto   && r.ID_Proyecto !== selectedProyecto)  return false;
     return true;
   });
 }
@@ -201,28 +203,35 @@ function updateCharts(rows) {
 }
 
 // ------------------------------------------------------------------
-// Update top-10 table
+// Update table (todos los proyectos filtrados)
 // ------------------------------------------------------------------
 function updateTable(rows) {
   const field = scoreField();
   const sorted = [...rows]
     .filter(r => !isNaN(parseFloat(r[field])))
-    .sort((a, b) => parseFloat(b[field]) - parseFloat(a[field]))
-    .slice(0, 10);
+    .sort((a, b) => parseFloat(b[field]) - parseFloat(a[field]));
 
-  const muniLabel = selectedMunicipio || "Todos los municipios";
-  const dimLabel  = selectedDimension  || "Todas las dimensiones";
-  document.getElementById("table-scope-label").textContent = `${muniLabel} · ${dimLabel}`;
+  const muniLabel  = selectedMunicipio || "Todos los municipios";
+  const dimLabel   = selectedDimension  || "Todas las dimensiones";
+  const projLabel  = selectedProyecto   ? ` · ${selectedProyecto}` : "";
+  document.getElementById("table-scope-label").textContent =
+    `${muniLabel} · ${dimLabel}${projLabel} — ${sorted.length} proyectos`;
 
   const tbody = document.getElementById("top-table-body");
   if (!sorted.length) {
     tbody.innerHTML = `<tr><td colspan="16" class="empty-row">Sin datos para los filtros seleccionados.</td></tr>`;
     return;
   }
+  tbody.innerHTML = buildTableHTML(sorted);
+}
 
+// ------------------------------------------------------------------
+// Build table HTML rows (shared between mini and full table)
+// ------------------------------------------------------------------
+function buildTableHTML(sorted) {
+  const field = scoreField();
   let html = "";
   sorted.forEach((r, i) => {
-    // Split products (;) and codes (,) into arrays
     const products = (r.Productos || "—").split(";").map(s => s.trim()).filter(Boolean);
     const codes    = (r.Codigos_MGA || "—").split(",").map(s => s.trim()).filter(Boolean);
     const numRows  = Math.max(products.length, codes.length, 1);
@@ -230,7 +239,6 @@ function updateTable(rows) {
     for (let j = 0; j < numRows; j++) {
       html += "<tr>";
       if (j === 0) {
-        // Shared columns with rowspan
         const rs = numRows > 1 ? ` rowspan="${numRows}"` : "";
         html += `<td${rs}>${i + 1}</td>`;
         html += `<td${rs}>${r.Municipio || "—"}</td>`;
@@ -238,7 +246,6 @@ function updateTable(rows) {
         html += `<td${rs} style="font-family:monospace;color:#1abc9c">${r.ID_Proyecto || "—"}</td>`;
         html += `<td${rs} style="max-width:180px">${r.Nombre_Proyecto || "—"}</td>`;
       }
-      // Per-product columns — MGA code as clickable link
       const code = codes[j] || "";
       const dane = String(r.Codigo_DANE || "").trim();
       if (code && dane) {
@@ -247,13 +254,13 @@ function updateTable(rows) {
         html += `<td style="font-family:monospace;font-size:11px;color:#1abc9c">${code}</td>`;
       }
       html += `<td style="max-width:240px;font-size:11.5px;color:#adb5bd">${products[j] || ""}</td>`;
-      
+
       const fin = (r.Finanzas && code) ? r.Finanzas[code] : undefined;
       const f24 = fin ? (fin['2024']||"—") : "—";
       const f25 = fin ? (fin['2025']||"—") : "—";
       const f26 = fin ? (fin['2026']||"—") : "—";
       const f27 = fin ? (fin['2027']||"—") : "—";
-      
+
       html += `<td style="font-size:10.5px;color:#e6edf3">${f24}</td>`;
       html += `<td style="font-size:10.5px;color:#e6edf3">${f25}</td>`;
       html += `<td style="font-size:10.5px;color:#e6edf3">${f26}</td>`;
@@ -270,9 +277,32 @@ function updateTable(rows) {
       html += "</tr>";
     }
   });
-  tbody.innerHTML = html;
+  return html;
 }
 
+// ------------------------------------------------------------------
+// Update full-table modal (all filtered rows)
+// ------------------------------------------------------------------
+function updateFullTable(rows) {
+  const field = scoreField();
+  const sorted = [...rows]
+    .filter(r => !isNaN(parseFloat(r[field])))
+    .sort((a, b) => parseFloat(b[field]) - parseFloat(a[field]));
+
+  const muniLabel  = selectedMunicipio || "Todos los municipios";
+  const dimLabel   = selectedDimension  || "Todas las dimensiones";
+  const projLabel  = selectedProyecto   ? ` · ${selectedProyecto}` : "";
+  const countLabel = ` · ${sorted.length} registros`;
+  document.getElementById("modal-scope-label").textContent =
+    `${muniLabel} · ${dimLabel}${projLabel}${countLabel}`;
+
+  const tbody = document.getElementById("full-table-body");
+  if (!sorted.length) {
+    tbody.innerHTML = `<tr><td colspan="16" class="empty-row">Sin datos para los filtros seleccionados.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = buildTableHTML(sorted);
+}
 // ------------------------------------------------------------------
 // Update map layer colors
 // ------------------------------------------------------------------
@@ -525,9 +555,18 @@ async function loadData() {
     dimSel.appendChild(opt);
   });
 
+  // Populate proyecto filter
+  const projSel = document.getElementById("filter-proyecto");
+  (data.projects || []).forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = `${p.id} – ${p.nombre}`;
+    projSel.appendChild(opt);
+  });
+
   // Update badge
   document.getElementById("last-updated").textContent =
-    `${allRows.length} registros · ${data.municipalities.length} municipios`;
+    `${allRows.length} registros · ${data.municipalities.length} municipios · ${(data.projects||[]).length} proyectos`;
 
   refresh();
 }
@@ -551,9 +590,11 @@ document.getElementById("btn-reset").addEventListener("click", () => {
   selectedMunicipio = "";
   selectedDimension = "";
   selectedSubscore  = "";
+  selectedProyecto  = "";
   document.getElementById("filter-municipio").value  = "";
   document.getElementById("filter-dimension").value  = "";
   document.getElementById("filter-subscore").value   = "";
+  document.getElementById("filter-proyecto").value   = "";
   refresh();
 });
 
@@ -566,6 +607,34 @@ document.getElementById("radar-toggle").addEventListener("click", () => {
   radarCharts = {};
   
   refresh();
+});
+
+// Filter: proyecto
+document.getElementById("filter-proyecto").addEventListener("change", e => {
+  selectedProyecto = e.target.value;
+  refresh();
+});
+
+// Modal: Ampliar / Cerrar
+function openTableModal() {
+  const rows = applyFilters(allRows);
+  updateFullTable(rows);
+  const modal = document.getElementById("table-modal");
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+}
+function closeTableModal() {
+  document.getElementById("table-modal").style.display = "none";
+  document.body.style.overflow = "";
+}
+
+document.getElementById("btn-expand-table").addEventListener("click", openTableModal);
+document.getElementById("btn-close-modal").addEventListener("click", closeTableModal);
+document.getElementById("table-modal").addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeTableModal();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeTableModal();
 });
 
 // ------------------------------------------------------------------

@@ -124,6 +124,19 @@
       background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
       padding: 6px 14px; font-size: 11px; color: var(--text-muted); z-index: 200;
     }
+    /* Execution columns separator */
+    .exec-sep { background: rgba(46,204,113,.07); border-left: 2px solid rgba(46,204,113,.4) !important; }
+    .exec-header { background: #0e2318 !important; color: var(--accent) !important; }
+    .pct-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 10px;
+      font-size: 10px; font-weight: 700; white-space: nowrap;
+    }
+    .pct-good  { background: rgba(46,204,113,.18); color: #2ecc71; border: 1px solid #2ecc7144; }
+    .pct-mid   { background: rgba(243,156,18,.18);  color: #f39c12; border: 1px solid #f39c1244; }
+    .pct-bad   { background: rgba(231,76,60,.16);   color: #e74c3c; border: 1px solid #e74c3c44; }
+    .pct-zero  { background: rgba(139,149,158,.12); color: #8b949e; border: 1px solid #8b949e33; }
+    .exec-val  { font-family: monospace; font-size: 10.5px; color: #e6edf3; }
+    .no-data   { color: #4a5568; font-size: 10px; }
   </style>
 </head>
 <body>
@@ -145,17 +158,65 @@
   <div class="table-container" id="table-container">
     <table id="sispt-table">
       <thead>
-        {# Render first 2 rows as sticky headers #}
-        {% for row_idx in range(2) %}
+        {# Row 0: group headers #}
         <tr>
           {% for col_idx in range(df.shape[1]) %}
-            <th>{{ df.iloc[row_idx, col_idx] if df.iloc[row_idx, col_idx] else '' }}</th>
+            <th>{{ df.iloc[0, col_idx] if df.iloc[0, col_idx] else '' }}</th>
           {% endfor %}
+          {# Alertas group headers #}
+          <th class="exec-sep exec-header" colspan="3">Ejecución Financiera 2024 (CUIPO)</th>
+          <th class="exec-header" colspan="2">Ejecución Física 2024 (PIIP)</th>
+          <th class="exec-sep exec-header" colspan="3">Ejecución Financiera 2025 (CUIPO)</th>
+          <th class="exec-header" colspan="2">Ejecución Física 2025 (PIIP)</th>
+          <th class="exec-header" colspan="2">Meta Cuatrienio</th>
         </tr>
-        {% endfor %}
+        {# Row 1: column sub-headers #}
+        <tr>
+          {% for col_idx in range(df.shape[1]) %}
+            <th>{{ df.iloc[1, col_idx] if df.iloc[1, col_idx] else '' }}</th>
+          {% endfor %}
+          <th class="exec-sep exec-header">Obligaciones 2024</th>
+          <th class="exec-header">Pagos 2024</th>
+          <th class="exec-header">% Fin. 2024</th>
+          <th class="exec-header">Ejec. Fís. 2024</th>
+          <th class="exec-header">% Fís. 2024</th>
+          <th class="exec-sep exec-header">Obligaciones 2025</th>
+          <th class="exec-header">Pagos 2025</th>
+          <th class="exec-header">% Fin. 2025</th>
+          <th class="exec-header">Ejec. Fís. 2025</th>
+          <th class="exec-header">% Fís. 2025</th>
+          <th class="exec-sep exec-header">Meta</th>
+          <th class="exec-header">Unidad</th>
+        </tr>
       </thead>
       <tbody>
+        {% macro fmt_money(val) %}
+          {%- if val is not none and val != 0 -%}
+            $ {{ "{:,.0f}".format(val).replace(",", ".") }}
+          {%- else -%}
+            <span class="exec-val" style="color:#8b949e">$ 0</span>
+          {%- endif -%}
+        {% endmacro %}
+        {% macro fmt_pct(val) %}
+          {%- set clean = (val | string).replace('%','').replace(',','.').strip() -%}
+          {%- set num = clean | float(-999) -%}
+          {%- if num == -999 -%}
+            {# texto no numérico #}
+            <span class="no-data" title="{{ val }}">N/D</span>
+          {%- elif num >= 80 -%}
+            <span class="pct-badge pct-good">{{ "{:.2f}".format(num) }}%</span>
+          {%- elif num >= 40 -%}
+            <span class="pct-badge pct-mid">{{ "{:.2f}".format(num) }}%</span>
+          {%- elif num > 0 -%}
+            <span class="pct-badge pct-bad">{{ "{:.2f}".format(num) }}%</span>
+          {%- else -%}
+            <span class="pct-badge pct-zero">0.00%</span>
+          {%- endif -%}
+        {% endmacro %}
         {% for row_idx in range(2, df.shape[0]) %}
+        {% set mga_code = df.iloc[row_idx, mga_col_idx] | string | trim if mga_col_idx is not none else "" %}
+        {% set product_code = df.iloc[row_idx, product_col_idx] | string | trim if product_col_idx is not none else "" %}
+        {% set ex = alertas_data.get(product_code, alertas_data.get(mga_code, {})) %}
         <tr {% if row_idx in highlighted_rows %}class="hl" id="target-row"{% endif %} data-row="{{ row_idx }}">
           {% for col_idx in range(df.shape[1]) %}
             {% set cell = df.iloc[row_idx, col_idx] %}
@@ -165,12 +226,24 @@
               {% else %}
                 {{ cell if cell and cell != 'nan' else '·' }}
               {% endif %}
-              
               {% if row_idx in highlighted_rows and col_idx == mga_col_idx %}
                 <span class="mga-badge">MGA</span>
               {% endif %}
             </td>
           {% endfor %}
+          {# Alertas execution columns #}
+          <td class="exec-sep exec-val">{{ fmt_money(ex.get('oblig_2024', 0)) }}</td>
+          <td class="exec-val">{{ fmt_money(ex.get('pagos_2024', 0)) }}</td>
+          <td>{{ fmt_pct(ex.get('pct_fin_2024', '')) }}</td>
+          <td class="exec-val">{% if ex.get('ejec_fis_2024') %}{{ ex.ejec_fis_2024 | round(1) }} <small style="color:#8b949e">{{ ex.get('unidad','') }}</small>{% else %}<span class="no-data">—</span>{% endif %}</td>
+          <td>{{ fmt_pct(ex.get('pct_fis_2024', '')) }}</td>
+          <td class="exec-sep exec-val">{{ fmt_money(ex.get('oblig_2025', 0)) }}</td>
+          <td class="exec-val">{{ fmt_money(ex.get('pagos_2025', 0)) }}</td>
+          <td>{{ fmt_pct(ex.get('pct_fin_2025', '')) }}</td>
+          <td class="exec-val">{% if ex.get('ejec_fis_2025') %}{{ ex.ejec_fis_2025 | round(1) }} <small style="color:#8b949e">{{ ex.get('unidad','') }}</small>{% else %}<span class="no-data">—</span>{% endif %}</td>
+          <td>{{ fmt_pct(ex.get('pct_fis_2025', '')) }}</td>
+          <td class="exec-sep exec-val">{% if ex.get('meta_cuatrenio') %}{{ ex.meta_cuatrenio }}{% else %}<span class="no-data">—</span>{% endif %}</td>
+          <td class="exec-val" style="color:#8b949e;font-size:10px">{{ ex.get('unidad', '') }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -185,7 +258,6 @@
       var target = document.getElementById('target-row');
       if (target) {
         var container = document.getElementById('table-container');
-        // Scroll the container so the target is visible
         setTimeout(function() {
           target.scrollIntoView({ block: 'center' });
         }, 200);
@@ -193,7 +265,7 @@
 
       // Stats
       var totalRows = document.querySelectorAll('#sispt-table tbody tr').length;
-      document.getElementById('stats').textContent = totalRows + ' filas · ' + "{{ df.shape[1] }}" + ' columnas';
+      document.getElementById('stats').textContent = totalRows + ' filas · ' + "{{ df.shape[1] + 12 }}" + ' columnas (incl. ejecución)';
 
       // Search filter
       var searchBox = document.getElementById('search');
@@ -209,9 +281,10 @@
             tr.classList.add('hidden-row');
           }
         });
-        document.getElementById('stats').textContent = visible + '/' + totalRows + ' filas · ' + "{{ df.shape[1] }}" + ' columnas';
+        document.getElementById('stats').textContent = visible + '/' + totalRows + ' filas · ' + "{{ df.shape[1] + 12 }}" + ' columnas (incl. ejecución)';
       });
     });
   </script>
 </body>
 </html>
+

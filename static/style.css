@@ -99,6 +99,88 @@ body {
 }
 .btn-reset:hover { border-color: #e74c3c; color: #e74c3c; }
 
+/* Wide project filter */
+.filter-select-wide { min-width: 280px; max-width: 420px; }
+
+/* Expand table button */
+.btn-expand-table {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.btn-expand-table:hover {
+  background: var(--accent);
+  color: #0d1117;
+}
+
+/* ---- TABLE MODAL ---- */
+.table-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeInModal .18s ease;
+}
+@keyframes fadeInModal {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.table-modal-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 48px rgba(0,0,0,.7);
+  width: 100%;
+  max-width: 1540px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.table-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.table-modal-body {
+  overflow: auto;
+  flex: 1;
+}
+.table-modal-body table {
+  min-width: 1200px;
+}
+.btn-close-modal {
+  background: transparent;
+  border: 1px solid #e74c3c66;
+  color: #e74c3c;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+}
+.btn-close-modal:hover {
+  background: #e74c3c;
+  color: #fff;
+  border-color: #e74c3c;
+}
+
 /* ---- MAIN GRID ---- */
 .main-grid {
   display: grid;
@@ -152,7 +234,7 @@ body {
 
 /* ---- CHARTS ---- */
 .charts-column { display: flex; flex-direction: column; gap: 16px; }
-.chart-card { /* individual chart card — layout handled by .card */ }
+/* .chart-card — layout handled by .card */
 .chart-wrap { padding: 12px 16px 16px; max-height: 200px; }
 canvas { max-width: 100%; }
 
